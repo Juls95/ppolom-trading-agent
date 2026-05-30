@@ -1,39 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { TraceEvent } from "@/lib/types";
 import { AGENTS } from "@/lib/agents";
 import { cn } from "@/lib/utils";
 
-export function DeliberationFeed({ events, isDemo }: { events: TraceEvent[]; isDemo?: boolean }) {
-  const [visible, setVisible] = useState(0);
+type DeliberationFeedProps = {
+  events: TraceEvent[];
+  isDemo?: boolean;
+  /** Controlled visible count; when omitted, shows all events immediately. */
+  visibleCount?: number;
+  autoPlay?: boolean;
+};
 
-  useEffect(() => {
-    setVisible(0);
-    if (events.length === 0) return;
-    const t = setInterval(() => {
-      setVisible((v) => {
-        if (v >= events.length) {
-          clearInterval(t);
-          return v;
-        }
-        return v + 1;
-      });
-    }, 800);
-    return () => clearInterval(t);
-  }, [events]);
+export function DeliberationFeed({
+  events,
+  isDemo,
+  visibleCount,
+  autoPlay = false,
+}: DeliberationFeedProps) {
+  const showAll = visibleCount === undefined && !autoPlay;
+  const limit = visibleCount ?? (autoPlay ? 0 : events.length);
+  const shown = showAll ? events : events.slice(0, limit);
 
   const agentColor = (id: string) => AGENTS.find((a) => a.id === id)?.color ?? "#D4AF37";
 
   return (
     <div className="space-y-3">
       {isDemo && (
-        <div className="demo-badge mb-4">DEMO · Datos simulados almacenados en demo_sessions</div>
+        <div className="demo-badge mb-4">DEMO · Datos simulados</div>
       )}
       {!isDemo && <div className="live-badge mb-4">LIVE · Datos reales del engine</div>}
-      {events.slice(0, visible).map((ev, i) => (
+      {shown.length === 0 && (
+        <p className="text-center text-sm text-maya-parchment/50">
+          Pulsa Reproducir para ver la deliberación del consejo.
+        </p>
+      )}
+      {shown.map((ev, i) => (
         <div
-          key={ev.id ?? i}
+          key={ev.id ?? `${ev.agent_id}-${ev.seq ?? i}`}
           className={cn("glass animate-in rounded-lg border-l-4 p-4", ev.vote === false && "opacity-90")}
           style={{ borderLeftColor: agentColor(ev.agent_id) }}
         >
@@ -51,7 +55,7 @@ export function DeliberationFeed({ events, isDemo }: { events: TraceEvent[]; isD
           <p className="mt-1 text-xs text-maya-parchment/40">{ev.event_type}</p>
         </div>
       ))}
-      {visible < events.length && (
+      {!showAll && limit < events.length && (
         <p className="text-center text-xs text-maya-parchment/40">Deliberando…</p>
       )}
     </div>

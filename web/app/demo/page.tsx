@@ -1,7 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AgentCouncilStrip } from "@/components/council/AgentCouncilStrip";
+import { DecisionSummaryPanel } from "@/components/council/DecisionSummaryPanel";
 import { DeliberationFeed } from "@/components/council/DeliberationFeed";
+import { ReplayControls } from "@/components/council/ReplayControls";
+import { useScenarioReplay } from "@/hooks/useScenarioReplay";
+import { agentStatesFromEvents } from "@/lib/deliberation";
 import { fetchDemoSessions, fetchDemoSession } from "@/lib/supabase";
 import type { DemoSession, TraceEvent } from "@/lib/types";
 import { DemoSessionSchema, TraceEventSchema } from "@/lib/types";
@@ -13,26 +18,42 @@ export default function DemoPage() {
   const [events, setEvents] = useState<TraceEvent[]>([]);
   const [sessionMeta, setSessionMeta] = useState<DemoSession | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const replay = useScenarioReplay(events);
+  const agentStates = useMemo(
+    () => agentStatesFromEvents(events, replay.visibleCount),
+    [events, replay.visibleCount]
+  );
 
   useEffect(() => {
+    setLoading(true);
     fetchDemoSessions()
       .then((data) => {
         const parsed = data.map((d: unknown) => DemoSessionSchema.parse(d));
         setSessions(parsed);
         if (parsed.length > 0) setSelected(parsed[0].slug);
+        setError(null);
       })
-      .catch((e) => setError(String(e)));
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
   }, []);
 
   const loadSession = useCallback(async (slug: string) => {
     setError(null);
-    const data = await fetchDemoSession(slug);
-    if (!data) {
-      setError("Sesión demo no encontrada. Ejecuta: python engine/scripts/seed_demo.py");
-      return;
+    try {
+      const data = await fetchDemoSession(slug);
+      if (!data) {
+        setEvents([]);
+        setSessionMeta(null);
+        setError("Sesión demo no encontrada. Ejecuta: python engine/scripts/seed_demo.py");
+        return;
+      }
+      setSessionMeta(DemoSessionSchema.parse(data.session));
+      setEvents(data.events.map((e: unknown) => TraceEventSchema.parse(e)));
+    } catch (e) {
+      setError(String(e));
     }
-    setSessionMeta(DemoSessionSchema.parse(data.session));
-    setEvents(data.events.map((e: unknown) => TraceEventSchema.parse(e)));
   }, []);
 
   useEffect(() => {
@@ -43,12 +64,11 @@ export default function DemoPage() {
     <div className="mx-auto max-w-6xl px-4 py-12">
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <h1 className="font-display text-4xl font-bold text-maya-gold">Demo</h1>
-        <span className="demo-badge">DEMO · demo_sessions en Supabase</span>
+        <span className="demo-badge">DEMO · Datos simulados</span>
       </div>
       <p className="mb-8 max-w-3xl text-maya-parchment/70">
-        Escenarios simulados almacenados en tablas <code>demo_*</code>, separados de{" "}
-        <code>live_*</code>. Cada sesión está claramente etiquetada. El dashboard en vivo usa datos
-        reales de CCXT.
+        Reproduce escenarios simulados del consejo de agentes (Hunab Ku → Kinich Ahau). Datos en tablas{" "}
+        <code>demo_*</code>, separados de <code>live_*</code>.
       </p>
 
       {error && (
@@ -57,18 +77,24 @@ export default function DemoPage() {
         </div>
       )}
 
-      {!error && sessions.length === 0 && (
+      {loading && !error && (
+        <p className="mb-6 text-sm text-maya-parchment/50">Cargando escenarios…</p>
+      )}
+
+      {!loading && !error && sessions.length === 0 && (
         <div className="mb-6 rounded-lg border border-amber-500/40 bg-amber-950/30 p-4 text-sm text-amber-200">
           No hay sesiones demo en Supabase. Ejecuta desde local:{" "}
           <code className="text-maya-turquoise">PYTHONPATH=. python engine/scripts/seed_demo.py</code>
         </div>
       )}
 
-      <div className="mb-8 flex flex-wrap gap-2">
+      <div className="mb-6 flex flex-wrap gap-2" role="tablist" aria-label="Escenarios demo">
         {sessions.map((s) => (
           <button
             key={s.slug}
             type="button"
+            role="tab"
+            aria-selected={selected === s.slug}
             onClick={() => setSelected(s.slug)}
             className={cn(
               "rounded-lg border px-4 py-2 text-sm transition",
@@ -77,57 +103,47 @@ export default function DemoPage() {
                 : "border-maya-gold/20 text-maya-parchment/70 hover:border-maya-gold/40"
             )}
           >
-            {s.title}
+            {s.title.replace(/^DEMO ·\s*/, "")}
           </button>
         ))}
       </div>
 
+      {sessionMeta && (
+        <div className="glass mb-6 rounded-xl p-4">
+          <ReplayControls
+            playing={replay.playing}
+            isComplete={replay.isComplete}
+            visibleCount={replay.visibleCount}
+            total={replay.total}
+            onPlay={replay.play}
+            onPause={replay.pause}
+            onReset={replay.reset}
+            onStep={replay.step}
+          />
+        </div>
+      )}
+
+      <div className="mb-8">
+        <h3 className="mb-3 font-display text-sm text-maya-turquoise">Consejo de agentes</h3>
+        <AgentCouncilStrip states={agentStates} />
+      </div>
+
       <div className="grid gap-8 lg:grid-cols-2">
-        <div>
+        <div className="space-y-6">
           {sessionMeta && (
-            <div className="glass mb-6 rounded-xl p-6">
+            <div className="glass rounded-xl p-6">
               <span className="demo-badge mb-3">{sessionMeta.badge_label}</span>
               <h2 className="font-display mt-3 text-xl font-bold">{sessionMeta.title}</h2>
               <p className="mt-2 text-sm text-maya-parchment/70">{sessionMeta.description}</p>
-              <div className="mt-4 flex gap-4 text-xs text-maya-parchment/50">
-                <span>Tipo: {sessionMeta.scenario_type}</span>
-                <span>Resultado: {sessionMeta.outcome}</span>
-                <span>Fuente: {sessionMeta.data_source}</span>
-              </div>
             </div>
           )}
-          <DemoPanel sessionMeta={sessionMeta} />
+          <DecisionSummaryPanel session={sessionMeta} />
         </div>
-        <DeliberationFeed events={events} isDemo />
+        <div>
+          <h2 className="font-display mb-4 text-xl text-maya-gold">Deliberación</h2>
+          <DeliberationFeed events={events} isDemo visibleCount={replay.visibleCount} />
+        </div>
       </div>
-    </div>
-  );
-}
-
-function DemoPanel({ sessionMeta }: { sessionMeta: DemoSession | null }) {
-  if (!sessionMeta) return null;
-  const isExecute = sessionMeta.outcome === "EXECUTE";
-  const isReject = sessionMeta.outcome === "REJECT";
-  return (
-    <div className="glass rounded-xl p-6">
-      <h3 className="mb-4 font-display text-lg text-maya-turquoise">Resumen de decisión</h3>
-      <div className="grid grid-cols-2 gap-4 text-sm">
-        <Metric label="Exchange compra" value={isExecute ? "kraken" : "—"} />
-        <Metric label="Exchange venta" value={isExecute ? "binance" : "—"} />
-        <Metric label="Precio Ask" value={isExecute ? "$69,980" : "—"} />
-        <Metric label="Precio Bid" value={isExecute ? "$70,250" : "—"} />
-        <Metric label="Ganancia neta" value={isExecute ? "+$109.75" : isReject ? "-$12" : "—"} />
-        <Metric label="Decisión" value={sessionMeta.outcome} highlight />
-      </div>
-    </div>
-  );
-}
-
-function Metric({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div>
-      <p className="text-maya-parchment/50">{label}</p>
-      <p className={highlight ? "font-bold text-maya-gold" : "text-maya-parchment"}>{value}</p>
     </div>
   );
 }

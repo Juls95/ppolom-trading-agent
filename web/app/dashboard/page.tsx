@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { DeliberationFeed } from "@/components/council/DeliberationFeed";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { OpportunityDeliberation } from "@/components/council/OpportunityDeliberation";
 import { fetchEngineState, fetchTrades, fetchOpportunities } from "@/lib/api";
+import { computeDecisionMetrics, type OpportunityRow } from "@/lib/deliberation";
+import { fetchLiveTraceEvents } from "@/lib/supabase";
 import { ENGINE_WS, type TraceEvent } from "@/lib/types";
 import { TraceEventSchema } from "@/lib/types";
 
@@ -26,13 +28,29 @@ type EngineState = {
   wallet?: Record<string, Record<string, number>>;
 };
 
+function parseTrace(raw: unknown): TraceEvent {
+  return TraceEventSchema.parse(raw);
+}
+
 export default function DashboardPage() {
   const [state, setState] = useState<EngineState | null>(null);
   const [trades, setTrades] = useState<unknown[]>([]);
-  const [opps, setOpps] = useState<unknown[]>([]);
+  const [opps, setOpps] = useState<OpportunityRow[]>([]);
   const [liveEvents, setLiveEvents] = useState<TraceEvent[]>([]);
+  const [selectedCycle, setSelectedCycle] = useState<number | null>(null);
   const [engineError, setEngineError] = useState<string | null>(null);
   const [wsStatus, setWsStatus] = useState<"connecting" | "open" | "closed">("connecting");
+
+  const metrics = useMemo(() => computeDecisionMetrics(opps), [opps]);
+
+  const loadTraces = useCallback(async () => {
+    try {
+      const rows = await fetchLiveTraceEvents(150);
+      setLiveEvents(rows.map((r: unknown) => parseTrace(r)));
+    } catch {
+      /* WS may still stream events */
+    }
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -44,16 +62,20 @@ export default function DashboardPage() {
         ]);
         setState(s);
         setTrades(t);
-        setOpps(o);
+        setOpps((o as OpportunityRow[]) ?? []);
         setEngineError(null);
       } catch (e) {
         setEngineError(String(e));
       }
     };
     load();
-    const interval = setInterval(load, 5000);
+    loadTraces();
+    const interval = setInterval(() => {
+      load();
+      loadTraces();
+    }, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [loadTraces]);
 
   useEffect(() => {
     let ws: WebSocket;
@@ -64,8 +86,9 @@ export default function DashboardPage() {
       ws.onmessage = (msg) => {
         const parsed = JSON.parse(msg.data);
         if (parsed.type === "trace") {
-          const ev = TraceEventSchema.parse(parsed.data);
-          setLiveEvents((prev) => [...prev.slice(-49), ev]);
+          const ev = parseTrace(parsed.data);
+          setLiveEvents((prev) => [...prev.slice(-199), ev]);
+          setSelectedCycle(null);
         }
         if (parsed.type === "snapshot") {
           setState((prev) => ({ ...prev, ...parsed.data } as EngineState));
@@ -114,8 +137,15 @@ export default function DashboardPage() {
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="P&L acumulado" value={`$${state?.total_pnl?.toFixed(2) ?? "—"}`} />
         <Stat label="Trades" value={String(state?.trades_count ?? 0)} />
-        <Stat label="Oportunidades" value={String(state?.opportunities_count ?? 0)} />
+        <Stat label="Oportunidades" value={String(state?.opportunities_count ?? opps.length)} />
         <Stat label="Supabase" value={state?.supabase_connected ? "Conectado" : "Offline"} />
+      </div>
+
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat label="Última decisión" value={metrics.last} />
+        <Stat label="Execute / Reject" value={`${metrics.execute} / ${metrics.reject}`} />
+        <Stat label="NO_ACTION" value={String(metrics.noAction)} />
+        <Stat label="Ratio execute" value={metrics.ratio} />
       </div>
 
       <div className="mb-8 grid gap-6 lg:grid-cols-2">
@@ -157,12 +187,23 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-2">
-        <div>
-          <h2 className="font-display mb-4 text-xl text-maya-gold">Deliberación en vivo</h2>
-          <DeliberationFeed events={liveEvents} />
+        <div className="glass rounded-xl p-6">
+          <h2 className="font-display mb-4 text-xl text-maya-gold">
+            Deliberación por oportunidad
+          </h2>
+          <p className="mb-4 text-xs text-maya-parchment/50">
+            Cada ciclo agrupa los votos Hunab Ku → Kinich Ahau antes del siguiente tick. Selecciona un
+            ciclo para ver todos los agentes.
+          </p>
+          <OpportunityDeliberation
+            events={liveEvents}
+            opportunities={opps}
+            selectedCycleIndex={selectedCycle}
+            onSelectCycle={setSelectedCycle}
+          />
         </div>
         <div className="space-y-6">
-          <DataTable title="Últimas oportunidades (live_opportunities)" rows={opps} />
+          <OpportunitiesTable rows={opps} />
           <DataTable title="Últimos trades (live_trades)" rows={trades} />
         </div>
       </div>
@@ -179,12 +220,48 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
+function OpportunitiesTable({ rows }: { rows: OpportunityRow[] }) {
+  return (
+    <div className="glass rounded-xl p-4">
+      <h3 className="mb-3 text-sm font-bold text-maya-turquoise">Últimas oportunidades</h3>
+      {rows.length === 0 ? (
+        <p className="text-xs text-maya-parchment/50">
+          Sin registros aún — el pipeline puede estar en NO_ACTION/REJECT.
+        </p>
+      ) : (
+        <div className="max-h-64 overflow-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="text-maya-parchment/50">
+                <th className="pb-2 pr-2">Ruta</th>
+                <th className="pb-2 pr-2">Bruto</th>
+                <th className="pb-2">Decisión</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(0, 8).map((o, i) => (
+                <tr key={o.id ?? i} className="border-t border-maya-gold/10">
+                  <td className="py-2 pr-2 capitalize">
+                    {o.buy_exchange}→{o.sell_exchange}
+                  </td>
+                  <td className="py-2 pr-2">${Number(o.gross_profit_usd).toFixed(0)}</td>
+                  <td className="py-2 font-bold text-maya-gold">{o.decision}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DataTable({ title, rows }: { title: string; rows: unknown[] }) {
   return (
     <div className="glass rounded-xl p-4">
       <h3 className="mb-3 text-sm font-bold text-maya-turquoise">{title}</h3>
       {rows.length === 0 ? (
-        <p className="text-xs text-maya-parchment/50">Sin registros aún — el pipeline puede estar en NO_ACTION/REJECT.</p>
+        <p className="text-xs text-maya-parchment/50">Sin registros aún.</p>
       ) : (
         <pre className="max-h-48 overflow-auto text-xs">{JSON.stringify(rows.slice(0, 5), null, 2)}</pre>
       )}

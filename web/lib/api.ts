@@ -23,3 +23,9 @@ export async function fetchOpportunities() {
   if (!res.ok) return [];
   return res.json();
 }
+
+export async function fetchTraceEvents(limit = 100) {
+  const res = await fetch(`${ENGINE_URL}/trace-events?limit=${limit}`, { cache: "no-store" });
+  if (!res.ok) return [];
+  return res.json();
+}

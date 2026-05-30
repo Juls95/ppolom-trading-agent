@@ -24,17 +24,40 @@ export async function fetchDemoSessions() {
 
 export async function fetchDemoSession(slug: string) {
   if (supabase) {
-    const { data: session } = await supabase.from("demo_sessions").select("*").eq("slug", slug).single();
+    const { data: session, error: sessionErr } = await supabase
+      .from("demo_sessions")
+      .select("*")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (sessionErr) throw new Error(`Supabase demo_sessions: ${sessionErr.message}`);
     if (!session) return null;
-    const { data: events } = await supabase
+    const { data: events, error: eventsErr } = await supabase
       .from("demo_trace_events")
       .select("*")
       .eq("session_id", session.id)
       .order("seq");
+    if (eventsErr) throw new Error(`Supabase demo_trace_events: ${eventsErr.message}`);
     return { session, events: events ?? [] };
   }
-  const res = await fetch(`${process.env.NEXT_PUBLIC_ENGINE_URL}/demo/sessions/${slug}`, { cache: "no-store" });
+  const engineUrl = process.env.NEXT_PUBLIC_ENGINE_URL ?? "";
+  if (!engineUrl) throw new Error("NEXT_PUBLIC_ENGINE_URL no configurada en el build");
+  const res = await fetch(`${engineUrl}/demo/sessions/${slug}`, { cache: "no-store" });
   if (!res.ok) return null;
   const json = await res.json();
+  if (json.error) return null;
   return { session: json.session, events: json.events ?? [] };
+}
+
+export async function fetchLiveTraceEvents(limit = 100) {
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("live_trace_events")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) throw new Error(`Supabase live_trace_events: ${error.message}`);
+    return [...(data ?? [])].reverse();
+  }
+  const { fetchTraceEvents } = await import("./api");
+  return fetchTraceEvents(limit);
 }
