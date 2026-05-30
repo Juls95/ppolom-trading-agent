@@ -42,7 +42,7 @@ export function OpportunityDeliberation({
             .slice(0, 12)
             .map(({ cycle, i }) => {
               const decision = inferCycleDecision(cycle);
-              const agents = [...new Set(cycle.map((e) => e.agent_name))].join(" → ");
+              const agents = Array.from(new Set(cycle.map((e) => e.agent_name))).join(" → ");
               const linked = opportunities?.find((o) => matchOpportunityToCycle(o, cycle));
               return (
                 <button
