@@ -11,6 +11,10 @@ function fmt(asset: string, amount: number) {
   return `${asset}: ${amount.toLocaleString(undefined, { maximumFractionDigits: digits })}`;
 }
 
+function hasFunds(balances?: Record<string, number>) {
+  return balances && Object.values(balances).some((v) => v > 0);
+}
+
 export function DemoBalanceCards({
   demoBalances,
   demoTradeEnabled,
@@ -19,9 +23,10 @@ export function DemoBalanceCards({
   demoTradeEnabled?: boolean;
 }) {
   const exchanges = ["okx", "bybit"];
-  const hasAny = exchanges.some((ex) => demoBalances?.[ex]);
 
-  if (!hasAny) return null;
+  if (!demoTradeEnabled && !exchanges.some((ex) => demoBalances?.[ex])) {
+    return null;
+  }
 
   return (
     <div className="mb-8">
@@ -38,31 +43,51 @@ export function DemoBalanceCards({
       <div className="grid gap-4 sm:grid-cols-2">
         {exchanges.map((ex) => {
           const entry = demoBalances?.[ex];
+          const funded = hasFunds(entry?.balances);
           return (
             <div key={ex} className="glass rounded-xl p-4">
               <div className="mb-2 flex items-center justify-between">
                 <span className="font-bold capitalize text-maya-gold">{ex}</span>
-                {entry?.label && (
-                  <span className="text-[10px] text-maya-parchment/40">{entry.label}</span>
-                )}
+                <span
+                  className={`text-[10px] font-bold ${funded ? "text-emerald-400" : "text-amber-400"}`}
+                >
+                  {entry?.error ? "Error" : funded ? "Conectado" : entry ? "Sin fondos" : "No conectado"}
+                </span>
               </div>
               {entry?.error ? (
                 <p className="text-xs text-red-400">{entry.error}</p>
-              ) : entry?.balances && Object.keys(entry.balances).length > 0 ? (
+              ) : funded && entry?.balances ? (
                 <ul className="space-y-1 text-sm text-maya-parchment/85">
                   {["USDT", "BTC", "ETH", "OKB"]
-                    .filter((a) => entry.balances?.[a] != null)
+                    .filter((a) => entry.balances?.[a] != null && entry.balances[a] > 0)
                     .map((a) => (
                       <li key={a}>{fmt(a, entry.balances![a])}</li>
                     ))}
                   {Object.entries(entry.balances)
-                    .filter(([a]) => !["USDT", "BTC", "ETH", "OKB"].includes(a))
+                    .filter(([a, v]) => v > 0 && !["USDT", "BTC", "ETH", "OKB"].includes(a))
                     .map(([a, v]) => (
                       <li key={a}>{fmt(a, v)}</li>
                     ))}
                 </ul>
+              ) : ex === "bybit" ? (
+                <p className="text-xs text-maya-parchment/60">
+                  Cuenta testnet conectada pero vacía. Solicita USDT y BTC en{" "}
+                  <a
+                    href="https://testnet.bybit.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-maya-turquoise underline"
+                  >
+                    testnet.bybit.com
+                  </a>{" "}
+                  (Assets → Transfer / faucet) para ejecutar compras.
+                </p>
+              ) : entry ? (
+                <p className="text-xs text-maya-parchment/50">Conectado — esperando fondos demo</p>
               ) : (
-                <p className="text-xs text-maya-parchment/50">Conectado — balance vacío o pendiente de refresco</p>
+                <p className="text-xs text-maya-parchment/50">
+                  Conecta en el panel inferior o configura keys en Fly secrets.
+                </p>
               )}
             </div>
           );

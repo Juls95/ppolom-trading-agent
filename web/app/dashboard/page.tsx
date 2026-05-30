@@ -48,6 +48,15 @@ export default function DashboardPage() {
 
   const metrics = useMemo(() => computeDecisionMetrics(opps), [opps]);
 
+  const priceGapWarning = useMemo(() => {
+    const okx = state?.books?.okx;
+    const bybit = state?.books?.bybit;
+    if (!okx || !bybit || okx.error || bybit.error) return null;
+    const gap = Math.abs(okx.best_bid - bybit.best_bid);
+    if (gap <= 50) return null;
+    return gap;
+  }, [state?.books]);
+
   const loadTraces = useCallback(async () => {
     try {
       const rows = await fetchLiveTraceEvents(150);
@@ -159,6 +168,14 @@ export default function DashboardPage() {
         demoBalances={state?.demo_balances}
         demoTradeEnabled={state?.demo_trade_enabled}
       />
+
+      {priceGapWarning != null && (
+        <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-950/20 p-3 text-xs text-amber-200/90">
+          Spread OKX↔Bybit: ${priceGapWarning.toFixed(0)} — si Bybit usa testnet y OKX mainnet, las
+          oportunidades son artificiales. En Fly (ams) usa BYBIT_PUBLIC_USE_TESTNET=false para precios
+          mainnet alineados.
+        </div>
+      )}
 
       <div className="mb-8 grid gap-6 lg:grid-cols-2">
         <div className="glass rounded-xl p-6">
