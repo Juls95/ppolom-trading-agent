@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --maya-gold: #d4af37;
+  --maya-obsidian: #0b0f14;
+  --maya-parchment: #f7f3e9;
+}
+
+body {
+  @apply bg-maya-obsidian text-maya-parchment antialiased;
+  background-image:
+    radial-gradient(ellipse at 20% 0%, rgba(212, 175, 55, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(78, 205, 196, 0.06) 0%, transparent 50%);
+}
+
+.glass {
+  @apply border border-maya-gold/20 bg-black/40 backdrop-blur-md;
+}
+
+.gradient-text {
+  @apply bg-gradient-to-r from-maya-gold via-maya-turquoise to-maya-jade bg-clip-text text-transparent;
+}
+
+.demo-badge {
+  @apply inline-flex items-center rounded-full border border-amber-500/60 bg-amber-950/50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-amber-300;
+}
+
+.live-badge {
+  @apply inline-flex items-center rounded-full border border-emerald-500/40 bg-emerald-950/40 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-emerald-300;
+}
