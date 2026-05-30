@@ -8,7 +8,6 @@ import { DemoBalanceCards } from "@/components/dashboard/DemoBalanceCards";
 import { HowItWorksPanel } from "@/components/dashboard/HowItWorksPanel";
 import { JudgeChecklist } from "@/components/dashboard/JudgeChecklist";
 import { LiveVerificationBanner } from "@/components/dashboard/LiveVerificationBanner";
-import { SimulatedWalletNotice } from "@/components/dashboard/SimulatedWalletNotice";
 import { TradeProofPanel } from "@/components/dashboard/TradeProofPanel";
 import {
   fetchDemoVerify,
@@ -42,7 +41,6 @@ type EngineState = {
   supabase_connected?: boolean;
   demo_trade_enabled?: boolean;
   demo_balances?: Record<string, { label: string; balances: Record<string, number>; error?: string }>;
-  wallet?: Record<string, Record<string, number>>;
 };
 
 function parseTrace(raw: unknown): TraceEvent {
@@ -128,7 +126,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="font-display text-4xl font-bold text-maya-gold">Dashboard Live</h1>
           <p className="mt-1 text-sm text-maya-parchment/55">
-            Arbitraje BTC/USDT · OKX + Bybit · datos CCXT + cuentas demo verificables
+            Arbitraje BTC/USDT · OKX Demo + Bybit Testnet · CCXT en tiempo real
           </p>
         </div>
         <Link
@@ -159,14 +157,26 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <HowItWorksPanel />
-
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <Stat label="Trades REAL DEMO" value={String(realTrades.length)} highlight="real" />
-        <Stat label="P&L sesión (sim+real)" value={`$${state?.total_pnl?.toFixed(2) ?? "—"}`} />
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat label="Trades demo CEX" value={String(realTrades.length)} highlight />
+        <Stat label="P&L acumulado" value={`$${state?.total_pnl?.toFixed(2) ?? "—"}`} />
         <Stat label="Oportunidades" value={String(state?.opportunities_count ?? opps.length)} />
         <Stat label="Execute / Reject" value={`${metrics.execute} / ${metrics.reject}`} />
-        <Stat label="Supabase" value={state?.supabase_connected ? "Conectado" : "Offline"} />
+      </div>
+
+      {/* Deliberación arriba — lo primero que ven los jueces en acción */}
+      <div className="mb-8 glass rounded-xl p-6">
+        <h2 className="font-display mb-2 text-2xl text-maya-gold">Deliberación del consejo</h2>
+        <p className="mb-4 text-xs text-maya-parchment/50">
+          Votos en vivo Hunab Ku → Kinich Ahau. Cuando todos aprueban, Kukulkán envía órdenes a OKX y
+          Bybit. Busca el evento <code className="text-maya-turquoise">demo_execute</code>.
+        </p>
+        <OpportunityDeliberation
+          events={liveEvents}
+          opportunities={opps}
+          selectedCycleIndex={selectedCycle}
+          onSelectCycle={setSelectedCycle}
+        />
       </div>
 
       <DemoBalanceCards
@@ -175,7 +185,6 @@ export default function DashboardPage() {
       />
 
       <div className="mb-8 grid gap-6 lg:grid-cols-2">
-        <JudgeChecklist verify={verify} />
         <div className="glass rounded-xl p-6">
           <h2 className="font-display mb-4 text-lg text-maya-turquoise">Order books (CCXT live)</h2>
           {state?.books ? (
@@ -200,53 +209,32 @@ export default function DashboardPage() {
             <p className="text-maya-parchment/50">Esperando datos…</p>
           )}
         </div>
+        <OpportunitiesTable rows={opps} />
       </div>
 
       <div className="mb-8">
         <TradeProofPanel rows={trades} verify={verify} />
       </div>
 
-      <div className="mb-8 grid gap-6 lg:grid-cols-2">
-        <SimulatedWalletNotice wallet={state?.wallet} />
+      <div className="mb-12">
         <DemoAccountPanel />
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-2">
-        <div className="glass rounded-xl p-6">
-          <h2 className="font-display mb-4 text-xl text-maya-gold">Deliberación del consejo</h2>
-          <p className="mb-4 text-xs text-maya-parchment/50">
-            Votos en vivo Hunab Ku → Kinich Ahau. Busca{" "}
-            <code className="text-maya-turquoise">demo_execute</code> para órdenes CEX reales.
-          </p>
-          <OpportunityDeliberation
-            events={liveEvents}
-            opportunities={opps}
-            selectedCycleIndex={selectedCycle}
-            onSelectCycle={setSelectedCycle}
-          />
-        </div>
-        <OpportunitiesTable rows={opps} />
+      {/* Instrucciones al final de la página */}
+      <div className="space-y-8 border-t border-maya-gold/15 pt-10">
+        <HowItWorksPanel />
+        <JudgeChecklist verify={verify} />
       </div>
     </div>
   );
 }
 
-function Stat({
-  label,
-  value,
-  highlight,
-}: {
-  label: string;
-  value: string;
-  highlight?: "real";
-}) {
+function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div className="glass rounded-xl p-4">
       <p className="text-xs text-maya-parchment/50">{label}</p>
       <p
-        className={`font-display text-2xl font-bold ${
-          highlight === "real" ? "text-emerald-400" : "text-maya-gold"
-        }`}
+        className={`font-display text-2xl font-bold ${highlight ? "text-emerald-400" : "text-maya-gold"}`}
       >
         {value}
       </p>
@@ -256,12 +244,12 @@ function Stat({
 
 function OpportunitiesTable({ rows }: { rows: OpportunityRow[] }) {
   return (
-    <div className="glass rounded-xl p-4">
-      <h3 className="mb-3 text-sm font-bold text-maya-turquoise">Últimas oportunidades</h3>
+    <div className="glass rounded-xl p-6">
+      <h3 className="font-display mb-3 text-lg text-maya-turquoise">Últimas oportunidades</h3>
       {rows.length === 0 ? (
         <p className="text-xs text-maya-parchment/50">Sin registros — mercado sin divergencia o rechazadas.</p>
       ) : (
-        <div className="max-h-96 overflow-auto">
+        <div className="max-h-64 overflow-auto">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="text-maya-parchment/50">
