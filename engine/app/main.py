@@ -216,6 +216,69 @@ async def demo_balances(
     return {"session_id": sid, "balances": out}
 
 
+@app.get("/demo/verify")
+async def demo_verify():
+    """Proof bundle for judges: account status, trade breakdown, external verify links."""
+    accounts: dict[str, Any] = {}
+    for ex in SUPPORTED_DEMO_EXCHANGES:
+        cred = demo_store.resolve_credential(ex)
+        if not cred:
+            accounts[ex] = {"connected": False, "label": None, "balances": {}, "error": None}
+            continue
+        if not cred.last_balances and not cred.last_error:
+            try:
+                await demo_store.fetch_balances_for_cred(cred)
+            except Exception:
+                pass
+        accounts[ex] = {
+            "connected": True,
+            "label": cred.label,
+            "balances": cred.last_balances,
+            "error": cred.last_error,
+            "meta": SUPPORTED_DEMO_EXCHANGES.get(ex, {}),
+        }
+
+    trades = repo.recent_trades(100)
+    recent_demo = [t for t in trades if (t.get("execution_mode") or t.get("status")) == "demo_cex"][:10]
+
+    return {
+        "demo_trade_enabled": settings.demo_trade_enabled,
+        "exchanges_monitored": settings.exchanges,
+        "symbol": settings.symbol,
+        "min_net_profit_usd": settings.min_net_profit_usd,
+        "accounts": accounts,
+        "trade_stats": repo.trade_stats(500),
+        "recent_demo_trades": recent_demo,
+        "verify_links": {
+            "okx_demo_trading": "https://www.okx.com/trade-demo/btc-usdt",
+            "okx_demo_assets": "https://www.okx.com/balance/demo-trading",
+            "bybit_testnet_orders": "https://testnet.bybit.com/user/assets/order/all-orders",
+            "bybit_testnet_assets": "https://testnet.bybit.com/user/assets/home/overview",
+            "labeled_replay": "https://ppolom-web.fly.dev/demo",
+        },
+        "data_layers": [
+            {
+                "id": "market",
+                "label": "Order books CCXT",
+                "description": "Precios públicos en tiempo real (OKX + Bybit vía REST)",
+                "is_simulated": False,
+            },
+            {
+                "id": "demo_cex",
+                "label": "Cuentas demo CEX",
+                "description": "OKX Demo Trading + Bybit Testnet con API keys reales",
+                "is_simulated": False,
+            },
+            {
+                "id": "simulated",
+                "label": "Wallet interna",
+                "description": "Paper trading del motor cuando no hay orden demo CEX",
+                "is_simulated": True,
+            },
+        ],
+    }
+
+
 @app.get("/demo/sessions")
 async def demo_sessions():
     return repo.list_demo_sessions()

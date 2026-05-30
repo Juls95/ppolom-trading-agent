@@ -82,6 +82,14 @@ class SupabaseRepo:
     def recent_trades(self, limit: int = 50) -> list[dict[str, Any]]:
         return self._get("live_trades", {"select": "*", "order": "created_at.desc", "limit": str(limit)})
 
+    def trade_stats(self, limit: int = 500) -> dict[str, int]:
+        rows = self.recent_trades(limit)
+        stats: dict[str, int] = {"demo_cex": 0, "simulated": 0, "total": len(rows)}
+        for row in rows:
+            mode = row.get("execution_mode") or row.get("status") or "simulated"
+            stats[mode] = stats.get(mode, 0) + 1
+        return stats
+
     def recent_opportunities(self, limit: int = 50) -> list[dict[str, Any]]:
         return self._get(
             "live_opportunities",
