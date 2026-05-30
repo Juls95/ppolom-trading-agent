@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     bybit_demo_api_secret: str = ""
     # False = Bybit integrated demo (enable_demo_trading); True = testnet.bybit.com keys
     bybit_demo_use_testnet: bool = False
+    # Public order-book polling: defaults True when bybit_demo_use_testnet (avoids US geo-block on Fly)
+    bybit_public_use_testnet: bool | None = None
 
     engine_port: int = 8000
     cors_origins: str = "http://localhost:3000"
@@ -70,6 +72,12 @@ class Settings(BaseSettings):
     @property
     def cors_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def bybit_public_sandbox(self) -> bool:
+        if self.bybit_public_use_testnet is not None:
+            return self.bybit_public_use_testnet
+        return self.bybit_demo_use_testnet
 
 
 @lru_cache

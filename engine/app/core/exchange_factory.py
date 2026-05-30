@@ -46,6 +46,10 @@ async def create_public_exchange(exchange_id: str, settings: Settings) -> ccxt.E
     ex = klass(opts)
     if settings.use_sandbox and hasattr(ex, "set_sandbox_mode"):
         ex.set_sandbox_mode(True)
+    # Bybit mainnet (api.bybit.com) returns 403 from US IPs (CloudFront geo-block).
+    # Use testnet public API when demo keys are testnet, or when explicitly configured.
+    if exchange_id == "bybit" and settings.bybit_public_sandbox and hasattr(ex, "set_sandbox_mode"):
+        ex.set_sandbox_mode(True)
     return ex
 
 

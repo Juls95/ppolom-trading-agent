@@ -4,7 +4,8 @@
 #
 
 app = 'ppolom-engine'
-primary_region = 'iad'
+# ams: Bybit blocks US IPs (CloudFront 403 on api.bybit.com from iad)
+primary_region = 'ams'
 
 [build]
   dockerfile = 'Dockerfile'
