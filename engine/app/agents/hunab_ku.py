@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import asyncio
 import time
-from typing import Any
-
-import ccxt.async_support as ccxt
 
 from app.config import Settings
+from app.core.exchange_factory import create_public_exchange
 from app.events import OrderBookSnapshot
 
 
@@ -15,22 +12,17 @@ class HunabKuMonitor:
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self._clients: dict[str, ccxt.Exchange] = {}
+        self._clients: dict[str, object] = {}
 
-    def _make_exchange(self, exchange_id: str) -> ccxt.Exchange:
-        klass = getattr(ccxt, exchange_id)
-        ex = klass({"enableRateLimit": True})
-        if self.settings.use_sandbox and hasattr(ex, "set_sandbox_mode"):
-            ex.set_sandbox_mode(True)
-        return ex
+    async def _get_exchange(self, exchange_id: str):
+        if exchange_id not in self._clients:
+            self._clients[exchange_id] = await create_public_exchange(exchange_id, self.settings)
+        return self._clients[exchange_id]
 
     async def _fetch_book(self, exchange_id: str) -> OrderBookSnapshot:
         start = time.perf_counter()
-        ex = self._clients.get(exchange_id)
-        if ex is None:
-            ex = self._make_exchange(exchange_id)
-            self._clients[exchange_id] = ex
         try:
+            ex = await self._get_exchange(exchange_id)
             book = await ex.fetch_order_book(self.settings.symbol, limit=10)
             latency = int((time.perf_counter() - start) * 1000)
             bids = book.get("bids") or [[0, 0]]
@@ -60,10 +52,12 @@ class HunabKuMonitor:
             )
 
     async def fetch_all(self) -> dict[str, OrderBookSnapshot]:
-        tasks = [self._fetch_book(ex) for ex in self.settings.exchanges]
-        results = await asyncio.gather(*tasks)
+        import asyncio
+
+        results = await asyncio.gather(*[self._fetch_book(ex) for ex in self.settings.exchanges])
         return {r.exchange: r for r in results}
 
     async def close(self) -> None:
         for ex in self._clients.values():
             await ex.close()
+        self._clients.clear()

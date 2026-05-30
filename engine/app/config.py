@@ -12,22 +12,35 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_service_role_key: str = ""
 
-    exchange_a: str = "binance"
-    exchange_b: str = "okx"
-    exchange_c: str = "kraken"
+    exchange_a: str = "okx"
+    exchange_b: str = "bybit"
+    exchange_c: str = "bybit"
     symbol: str = "BTC/USDT"
     use_sandbox: bool = False
 
     min_net_profit_usd: float = 25.0
-    taker_fee_binance: float = 0.001
     taker_fee_okx: float = 0.0008
+    taker_fee_bybit: float = 0.001
     taker_fee_kraken: float = 0.0026
+    taker_fee_binance: float = 0.001
     slippage_rate: float = 0.0005
     withdrawal_fee_usd: float = 10.0
     max_drawdown_pct: float = 0.5
     poll_interval_ms: int = 500
     start_balance_usdt: float = 100_000.0
     start_balance_btc: float = 2.0
+
+    demo_trade_enabled: bool = False
+    demo_min_qty_btc: float = 0.001
+
+    okx_demo_api_key: str = ""
+    okx_demo_api_secret: str = ""
+    okx_demo_password: str = ""
+
+    bybit_demo_api_key: str = ""
+    bybit_demo_api_secret: str = ""
+    # False = Bybit integrated demo (enable_demo_trading); True = testnet.bybit.com keys
+    bybit_demo_use_testnet: bool = False
 
     engine_port: int = 8000
     cors_origins: str = "http://localhost:3000"
@@ -39,18 +52,20 @@ class Settings(BaseSettings):
 
     def fee_for(self, exchange_id: str) -> float:
         mapping = {
-            self.exchange_a: self.taker_fee_binance,
-            self.exchange_b: self.taker_fee_okx,
-            self.exchange_c: self.taker_fee_kraken,
-            "binance": self.taker_fee_binance,
             "okx": self.taker_fee_okx,
+            "bybit": self.taker_fee_bybit,
             "kraken": self.taker_fee_kraken,
+            "binance": self.taker_fee_binance,
         }
         return mapping.get(exchange_id.lower(), 0.001)
 
     @property
     def exchanges(self) -> list[str]:
-        return [self.exchange_a, self.exchange_b, self.exchange_c]
+        seen: list[str] = []
+        for ex in [self.exchange_a, self.exchange_b, self.exchange_c]:
+            if ex not in seen:
+                seen.append(ex)
+        return seen
 
     @property
     def cors_list(self) -> list[str]:

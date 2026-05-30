@@ -8,6 +8,8 @@ from app.agents.itzamna import detect_opportunities
 from app.agents.ixchel import evaluate_liquidity
 from app.agents.kukulkan import simulate_execution
 from app.config import Settings
+from app.core.demo_accounts import DemoAccountStore
+from app.core.demo_executor import try_demo_execution
 from app.core.risk import CircuitBreaker
 from app.core.wallet import Wallet
 from app.db.supabase_repo import SupabaseRepo
@@ -33,12 +35,14 @@ class Pipeline:
         wallet: Wallet,
         repo: SupabaseRepo,
         breaker: CircuitBreaker,
+        demo_store: DemoAccountStore | None = None,
     ) -> None:
         self.settings = settings
         self.state = engine_state
         self.wallet = wallet
         self.repo = repo
         self.breaker = breaker
+        self.demo_store = demo_store
 
     def _emit(self, agent_id: str, event_type: str, message: str, vote: bool | None = None, payload: dict | None = None) -> TraceEvent:
         ev = TraceEvent(
@@ -154,12 +158,37 @@ class Pipeline:
             self._emit("kukulkan", "execute", "Ejecución simulada falló", vote=False)
             return opp
 
+        execution_mode = "simulated"
+        exec_details: dict = {}
+        if self.demo_store:
+            try:
+                demo_result = await try_demo_execution(opp, qty, self.demo_store, self.settings)
+                if demo_result:
+                    execution_mode = demo_result.get("execution_mode", "demo_cex")
+                    exec_details = demo_result
+                    latency = demo_result.get("latency_ms", latency)
+                    self._emit(
+                        "kukulkan",
+                        "demo_execute",
+                        f"Órdenes demo CEX: buy={demo_result.get('buy_order_id')} sell={demo_result.get('sell_order_id')}",
+                        vote=True,
+                        payload=demo_result,
+                    )
+            except Exception as exc:
+                self._emit(
+                    "kukulkan",
+                    "demo_execute_error",
+                    f"Demo CEX falló (simulación interna OK): {exc}",
+                    vote=True,
+                    payload={"error": str(exc)},
+                )
+
         self._emit(
             "kukulkan",
             "execute",
-            f"Trade simulado: +${net:.2f} en {latency}ms",
+            f"Trade {'demo CEX' if execution_mode == 'demo_cex' else 'simulado'}: +${net:.2f} en {latency}ms",
             vote=True,
-            payload={"net": net, "latency_ms": latency},
+            payload={"net": net, "latency_ms": latency, "execution_mode": execution_mode},
         )
 
         # Kinich Ahau
@@ -184,10 +213,18 @@ class Pipeline:
                 "sell_price": opp.bid_price,
                 "net_profit_usd": net,
                 "latency_ms": latency,
-                "status": "simulated",
+                "status": execution_mode,
+                "execution_mode": execution_mode,
+                "details": exec_details,
             }
         )
-        self.repo.insert_wallet_snapshot(self.wallet.snapshot())
+        wallet_snap = self.wallet.snapshot()
+        if self.demo_store:
+            for ex in self.settings.exchanges:
+                cred = self.demo_store.resolve_credential(ex)
+                if cred and cred.last_balances:
+                    wallet_snap[f"{ex}_demo"] = cred.last_balances
+        self.repo.insert_wallet_snapshot(wallet_snap)
 
         self._emit(
             "kinich_ahau",
