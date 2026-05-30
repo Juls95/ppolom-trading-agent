@@ -87,3 +87,9 @@ class SupabaseRepo:
             "live_opportunities",
             {"select": "*", "order": "created_at.desc", "limit": str(limit)},
         )
+
+    def recent_trace_events(self, limit: int = 100) -> list[dict[str, Any]]:
+        return self._get(
+            "live_trace_events",
+            {"select": "*", "order": "created_at.desc", "limit": str(limit)},
+        )

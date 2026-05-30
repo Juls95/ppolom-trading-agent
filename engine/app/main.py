@@ -94,6 +94,13 @@ async def trades():
     return repo.recent_trades()
 
 
+@app.get("/trace-events")
+async def trace_events(limit: int = 100):
+    lim = max(1, min(limit, 500))
+    rows = repo.recent_trace_events(lim)
+    return list(reversed(rows))
+
+
 @app.get("/demo/sessions")
 async def demo_sessions():
     return repo.list_demo_sessions()
