@@ -18,13 +18,13 @@ class Settings(BaseSettings):
     symbol: str = "BTC/USDT"
     use_sandbox: bool = False
 
-    min_net_profit_usd: float = 25.0
+    min_net_profit_usd: float = 1.0
     taker_fee_okx: float = 0.0008
     taker_fee_bybit: float = 0.001
     taker_fee_kraken: float = 0.0026
     taker_fee_binance: float = 0.001
     slippage_rate: float = 0.0005
-    withdrawal_fee_usd: float = 10.0
+    withdrawal_fee_usd: float = 0.0
     max_drawdown_pct: float = 0.5
     poll_interval_ms: int = 500
     start_balance_usdt: float = 100_000.0

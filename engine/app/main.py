@@ -269,12 +269,6 @@ async def demo_verify():
                 "description": "OKX Demo Trading + Bybit Testnet con API keys reales",
                 "is_simulated": False,
             },
-            {
-                "id": "simulated",
-                "label": "Wallet interna",
-                "description": "Paper trading del motor cuando no hay orden demo CEX",
-                "is_simulated": True,
-            },
         ],
     }
 
