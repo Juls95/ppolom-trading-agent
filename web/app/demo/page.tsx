@@ -57,6 +57,13 @@ export default function DemoPage() {
         </div>
       )}
 
+      {!error && sessions.length === 0 && (
+        <div className="mb-6 rounded-lg border border-amber-500/40 bg-amber-950/30 p-4 text-sm text-amber-200">
+          No hay sesiones demo en Supabase. Ejecuta desde local:{" "}
+          <code className="text-maya-turquoise">PYTHONPATH=. python engine/scripts/seed_demo.py</code>
+        </div>
+      )}
+
       <div className="mb-8 flex flex-wrap gap-2">
         {sessions.map((s) => (
           <button

@@ -11,11 +11,14 @@ export const supabase = supabaseConfigured
 
 export async function fetchDemoSessions() {
   if (supabase) {
-    const { data } = await supabase.from("demo_sessions").select("*").order("created_at");
+    const { data, error } = await supabase.from("demo_sessions").select("*").order("created_at");
+    if (error) throw new Error(`Supabase demo_sessions: ${error.message}`);
     return data ?? [];
   }
-  const res = await fetch(`${process.env.NEXT_PUBLIC_ENGINE_URL}/demo/sessions`, { cache: "no-store" });
-  if (!res.ok) return [];
+  const engineUrl = process.env.NEXT_PUBLIC_ENGINE_URL ?? "";
+  if (!engineUrl) throw new Error("NEXT_PUBLIC_ENGINE_URL no configurada en el build");
+  const res = await fetch(`${engineUrl}/demo/sessions`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Engine /demo/sessions: ${res.status}`);
   return res.json();
 }
 
