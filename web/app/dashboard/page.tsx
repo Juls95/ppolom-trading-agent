@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { OpportunityDeliberation } from "@/components/council/OpportunityDeliberation";
+import { DemoAccountPanel } from "@/components/dashboard/DemoAccountPanel";
+import { TradesTable } from "@/components/dashboard/TradesTable";
 import { fetchEngineState, fetchTrades, fetchOpportunities } from "@/lib/api";
 import { computeDecisionMetrics, type OpportunityRow } from "@/lib/deliberation";
 import { fetchLiveTraceEvents } from "@/lib/supabase";
@@ -25,6 +27,8 @@ type EngineState = {
   trades_count: number;
   opportunities_count: number;
   supabase_connected?: boolean;
+  demo_trade_enabled?: boolean;
+  demo_balances?: Record<string, { label: string; balances: Record<string, number>; error?: string }>;
   wallet?: Record<string, Record<string, number>>;
 };
 
@@ -148,6 +152,8 @@ export default function DashboardPage() {
         <Stat label="Ratio execute" value={metrics.ratio} />
       </div>
 
+      <DemoAccountPanel />
+
       <div className="mb-8 grid gap-6 lg:grid-cols-2">
         <div className="glass rounded-xl p-6">
           <h2 className="font-display mb-4 text-lg text-maya-turquoise">Order books (live)</h2>
@@ -204,7 +210,7 @@ export default function DashboardPage() {
         </div>
         <div className="space-y-6">
           <OpportunitiesTable rows={opps} />
-          <DataTable title="Últimos trades (live_trades)" rows={trades} />
+          <TradesTable rows={trades as Parameters<typeof TradesTable>[0]["rows"]} />
         </div>
       </div>
     </div>
@@ -251,19 +257,6 @@ function OpportunitiesTable({ rows }: { rows: OpportunityRow[] }) {
             </tbody>
           </table>
         </div>
-      )}
-    </div>
-  );
-}
-
-function DataTable({ title, rows }: { title: string; rows: unknown[] }) {
-  return (
-    <div className="glass rounded-xl p-4">
-      <h3 className="mb-3 text-sm font-bold text-maya-turquoise">{title}</h3>
-      {rows.length === 0 ? (
-        <p className="text-xs text-maya-parchment/50">Sin registros aún.</p>
-      ) : (
-        <pre className="max-h-48 overflow-auto text-xs">{JSON.stringify(rows.slice(0, 5), null, 2)}</pre>
       )}
     </div>
   );
