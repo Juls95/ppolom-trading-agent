@@ -1,0 +1,58 @@
+export const AGENTS = [
+  {
+    id: "hunab_ku",
+    name: "Hunab Ku",
+    domain: "Creador supremo, energía cósmica",
+    role: "Monitoreo en tiempo real de order books BTC",
+    importance: "Fuente de verdad — sin datos frescos todo falla",
+    color: "#D4AF37",
+    glyph: "☀",
+  },
+  {
+    id: "itzamna",
+    name: "Itzamná",
+    domain: "Cielo, sabiduría, calendario",
+    role: "Detección de oportunidades de arbitraje",
+    importance: "Filtra ruido y prioriza divergencias reales",
+    color: "#4ECDC4",
+    glyph: "📜",
+  },
+  {
+    id: "chaac",
+    name: "Chaac",
+    domain: "Lluvia, truenos, fertilidad",
+    role: "Consideración de costos reales",
+    importance: "Evita operaciones rentables en bruto pero perdedoras en neto",
+    color: "#3498DB",
+    glyph: "⚡",
+  },
+  {
+    id: "ixchel",
+    name: "Ixchel",
+    domain: "Luna, medicina, tejido",
+    role: "Órdenes parciales y balances",
+    importance: "Realismo operativo con liquidez limitada",
+    color: "#E8DAEF",
+    glyph: "🌙",
+  },
+  {
+    id: "kukulkan",
+    name: "Kukulkán",
+    domain: "Viento, conocimiento, Venus",
+    role: "Ejecución simulada",
+    importance: "Materializa la decisión multi-agente",
+    color: "#2ECC71",
+    glyph: "🐍",
+  },
+  {
+    id: "kinich_ahau",
+    name: "Kinich Ahau",
+    domain: "Sol diurno",
+    role: "Registro y visualización de rendimiento",
+    importance: "Historial, P&L y métricas en Supabase",
+    color: "#F39C12",
+    glyph: "🔆",
+  },
+] as const;
+
+export type AgentId = (typeof AGENTS)[number]["id"];
