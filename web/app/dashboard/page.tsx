@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { OpportunityDeliberation } from "@/components/council/OpportunityDeliberation";
 import { DemoAccountPanel } from "@/components/dashboard/DemoAccountPanel";
+import { DemoBalanceCards } from "@/components/dashboard/DemoBalanceCards";
 import { TradesTable } from "@/components/dashboard/TradesTable";
 import { fetchEngineState, fetchTrades, fetchOpportunities } from "@/lib/api";
 import { computeDecisionMetrics, type OpportunityRow } from "@/lib/deliberation";
@@ -153,6 +154,11 @@ export default function DashboardPage() {
       </div>
 
       <DemoAccountPanel />
+
+      <DemoBalanceCards
+        demoBalances={state?.demo_balances}
+        demoTradeEnabled={state?.demo_trade_enabled}
+      />
 
       <div className="mb-8 grid gap-6 lg:grid-cols-2">
         <div className="glass rounded-xl p-6">
