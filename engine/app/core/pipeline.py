@@ -135,24 +135,44 @@ class Pipeline:
             payload=cost_details,
         )
 
-        # Ixchel
-        liq_vote, qty, liq_decision = evaluate_liquidity(opp, self.wallet, self.settings)
+        # Ixchel — use real demo balances when DEMO_TRADE_ENABLED
+        demo_bal: dict[str, dict[str, float]] | None = None
+        use_demo_liq = False
+        if self.demo_store and self.settings.demo_trade_enabled:
+            demo_bal = {}
+            for ex in (opp.buy_exchange, opp.sell_exchange):
+                cred = self.demo_store.resolve_credential(ex)
+                if cred:
+                    try:
+                        await self.demo_store.fetch_balances_for_cred(cred)
+                        demo_bal[ex] = cred.last_balances
+                    except Exception:
+                        demo_bal[ex] = cred.last_balances or {}
+            use_demo_liq = all(
+                self.demo_store.resolve_credential(ex) for ex in (opp.buy_exchange, opp.sell_exchange)
+            )
+
+        liq_vote, qty, liq_decision, liq_detail = evaluate_liquidity(
+            opp, self.wallet, self.settings, demo_bal if use_demo_liq else None
+        )
         if not liq_vote or qty <= 0:
             opp.decision = Decision.NO_ACTION
-            self._emit("ixchel", "liquidity", "Sin liquidez/balance suficiente", vote=False)
+            self._emit("ixchel", "liquidity", liq_detail, vote=False)
             self.repo.insert_opportunity({**opp.model_dump(mode="json"), "session_id": str(self.state.session_id), "decision": opp.decision.value})
             return opp
 
         self._emit(
             "ixchel",
             "liquidity",
-            f"{'Ejecución parcial' if liq_decision == Decision.PARTIAL else 'Liquidez OK'}: {qty:.4f} BTC",
+            f"{'Ejecución parcial' if liq_decision == Decision.PARTIAL else 'Liquidez OK'}: {liq_detail}",
             vote=True,
             payload={"qty": qty, "partial": liq_decision == Decision.PARTIAL},
         )
 
-        # Kukulkán — all prior votes True
-        exec_ok, net, latency = simulate_execution(opp, self.wallet, qty, self.settings)
+        # Kukulkán — skip simulated wallet drain when demo CEX accounts are wired
+        exec_ok, net, latency = simulate_execution(
+            opp, self.wallet, qty, self.settings, skip_wallet=use_demo_liq
+        )
         if not exec_ok:
             opp.decision = Decision.REJECT
             self._emit("kukulkan", "execute", "Ejecución simulada falló", vote=False)

@@ -77,7 +77,8 @@ class Settings(BaseSettings):
     def bybit_public_sandbox(self) -> bool:
         if self.bybit_public_use_testnet is not None:
             return self.bybit_public_use_testnet
-        return self.bybit_demo_use_testnet
+        # Mainnet order books by default (Fly ams). Set BYBIT_PUBLIC_USE_TESTNET=true on US IPs.
+        return False
 
 
 @lru_cache
