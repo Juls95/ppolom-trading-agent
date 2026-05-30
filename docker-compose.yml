@@ -1,0 +1,21 @@
+services:
+  engine:
+    build: ./engine
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./engine:/app
+
+  web:
+    build: ./web
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      NEXT_PUBLIC_ENGINE_URL: http://engine:8000
+      NEXT_PUBLIC_ENGINE_WS: ws://engine:8000/ws
+    depends_on:
+      - engine

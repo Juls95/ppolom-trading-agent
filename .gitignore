@@ -1,0 +1,35 @@
+# env
+.env
+.env.local
+.env.*.local
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# node
+node_modules/
+.next/
+out/
+.pnpm-store/
+
+# data
+*.db
+data/
+
+# os / ide
+.DS_Store
+.idea/
+.vscode/
+
+# fly
+.fly/
+
+# docs
+docs_research/
+supabase/
