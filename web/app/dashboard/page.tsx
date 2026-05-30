@@ -1,11 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { OpportunityDeliberation } from "@/components/council/OpportunityDeliberation";
 import { DemoAccountPanel } from "@/components/dashboard/DemoAccountPanel";
 import { DemoBalanceCards } from "@/components/dashboard/DemoBalanceCards";
-import { TradesTable } from "@/components/dashboard/TradesTable";
-import { fetchEngineState, fetchTrades, fetchOpportunities } from "@/lib/api";
+import { HowItWorksPanel } from "@/components/dashboard/HowItWorksPanel";
+import { JudgeChecklist } from "@/components/dashboard/JudgeChecklist";
+import { LiveVerificationBanner } from "@/components/dashboard/LiveVerificationBanner";
+import { SimulatedWalletNotice } from "@/components/dashboard/SimulatedWalletNotice";
+import { TradeProofPanel } from "@/components/dashboard/TradeProofPanel";
+import {
+  fetchDemoVerify,
+  fetchEngineState,
+  fetchTrades,
+  fetchOpportunities,
+} from "@/lib/api";
+import type { DemoVerifyResponse, TradeRow } from "@/lib/dashboard";
+import { splitTrades } from "@/lib/dashboard";
 import { computeDecisionMetrics, type OpportunityRow } from "@/lib/deliberation";
 import { fetchLiveTraceEvents } from "@/lib/supabase";
 import { ENGINE_WS, type TraceEvent } from "@/lib/types";
@@ -39,7 +51,8 @@ function parseTrace(raw: unknown): TraceEvent {
 
 export default function DashboardPage() {
   const [state, setState] = useState<EngineState | null>(null);
-  const [trades, setTrades] = useState<unknown[]>([]);
+  const [verify, setVerify] = useState<DemoVerifyResponse | null>(null);
+  const [trades, setTrades] = useState<TradeRow[]>([]);
   const [opps, setOpps] = useState<OpportunityRow[]>([]);
   const [liveEvents, setLiveEvents] = useState<TraceEvent[]>([]);
   const [selectedCycle, setSelectedCycle] = useState<number | null>(null);
@@ -47,15 +60,7 @@ export default function DashboardPage() {
   const [wsStatus, setWsStatus] = useState<"connecting" | "open" | "closed">("connecting");
 
   const metrics = useMemo(() => computeDecisionMetrics(opps), [opps]);
-
-  const priceGapWarning = useMemo(() => {
-    const okx = state?.books?.okx;
-    const bybit = state?.books?.bybit;
-    if (!okx || !bybit || okx.error || bybit.error) return null;
-    const gap = Math.abs(okx.best_bid - bybit.best_bid);
-    if (gap <= 50) return null;
-    return gap;
-  }, [state?.books]);
+  const { real: realTrades } = useMemo(() => splitTrades(trades), [trades]);
 
   const loadTraces = useCallback(async () => {
     try {
@@ -69,14 +74,16 @@ export default function DashboardPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [s, t, o] = await Promise.all([
+        const [s, t, o, v] = await Promise.all([
           fetchEngineState(),
           fetchTrades(),
           fetchOpportunities(),
+          fetchDemoVerify(),
         ]);
         setState(s);
-        setTrades(t);
+        setTrades((t as TradeRow[]) ?? []);
         setOpps((o as OpportunityRow[]) ?? []);
+        setVerify(v);
         setEngineError(null);
       } catch (e) {
         setEngineError(String(e));
@@ -117,29 +124,33 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <h1 className="font-display text-4xl font-bold text-maya-gold">Dashboard</h1>
-        <span className="live-badge">LIVE · CCXT real data</span>
-        <span className="text-xs text-maya-parchment/40">WS: {wsStatus}</span>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="font-display text-4xl font-bold text-maya-gold">Dashboard Live</h1>
+          <p className="mt-1 text-sm text-maya-parchment/55">
+            Arbitraje BTC/USDT · OKX + Bybit · datos CCXT + cuentas demo verificables
+          </p>
+        </div>
+        <Link
+          href="/methodology"
+          className="rounded-lg border border-maya-turquoise/30 px-3 py-2 text-xs font-bold text-maya-turquoise hover:bg-maya-turquoise/10"
+        >
+          Metodología →
+        </Link>
       </div>
+
+      <LiveVerificationBanner verify={verify} wsOpen={wsStatus === "open"} />
 
       {engineError && (
         <div className="mb-6 rounded-lg border border-amber-500/40 bg-amber-950/30 p-4 text-sm">
           <p className="font-bold text-amber-300">Engine no disponible</p>
           <p className="mt-1 text-maya-parchment/70">{engineError}</p>
-          <p className="mt-2 text-xs text-maya-parchment/50">
-            Diagnóstico: verifica NEXT_PUBLIC_ENGINE_URL y que el servicio Fly esté activo. Usa{" "}
-            <a href="/demo" className="text-maya-turquoise underline">
-              /demo
-            </a>{" "}
-            para escenarios etiquetados mientras tanto.
-          </p>
         </div>
       )}
 
       {state?.exchange_errors && Object.keys(state.exchange_errors).length > 0 && (
         <div className="mb-6 rounded-lg border border-red-500/30 bg-red-950/20 p-4">
-          <p className="mb-2 text-sm font-bold text-red-300">Errores de exchange (datos reales)</p>
+          <p className="mb-2 text-sm font-bold text-red-300">Errores de exchange</p>
           {Object.entries(state.exchange_errors).map(([ex, err]) => (
             <p key={ex} className="text-xs text-maya-parchment/70">
               <strong>{ex}:</strong> {err}
@@ -148,38 +159,25 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="P&L acumulado" value={`$${state?.total_pnl?.toFixed(2) ?? "—"}`} />
-        <Stat label="Trades" value={String(state?.trades_count ?? 0)} />
+      <HowItWorksPanel />
+
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <Stat label="Trades REAL DEMO" value={String(realTrades.length)} highlight="real" />
+        <Stat label="P&L sesión (sim+real)" value={`$${state?.total_pnl?.toFixed(2) ?? "—"}`} />
         <Stat label="Oportunidades" value={String(state?.opportunities_count ?? opps.length)} />
+        <Stat label="Execute / Reject" value={`${metrics.execute} / ${metrics.reject}`} />
         <Stat label="Supabase" value={state?.supabase_connected ? "Conectado" : "Offline"} />
       </div>
-
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Última decisión" value={metrics.last} />
-        <Stat label="Execute / Reject" value={`${metrics.execute} / ${metrics.reject}`} />
-        <Stat label="NO_ACTION" value={String(metrics.noAction)} />
-        <Stat label="Ratio execute" value={metrics.ratio} />
-      </div>
-
-      <DemoAccountPanel />
 
       <DemoBalanceCards
         demoBalances={state?.demo_balances}
         demoTradeEnabled={state?.demo_trade_enabled}
       />
 
-      {priceGapWarning != null && (
-        <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-950/20 p-3 text-xs text-amber-200/90">
-          Spread OKX↔Bybit: ${priceGapWarning.toFixed(0)} — si Bybit usa testnet y OKX mainnet, las
-          oportunidades son artificiales. En Fly (ams) usa BYBIT_PUBLIC_USE_TESTNET=false para precios
-          mainnet alineados.
-        </div>
-      )}
-
       <div className="mb-8 grid gap-6 lg:grid-cols-2">
+        <JudgeChecklist verify={verify} />
         <div className="glass rounded-xl p-6">
-          <h2 className="font-display mb-4 text-lg text-maya-turquoise">Order books (live)</h2>
+          <h2 className="font-display mb-4 text-lg text-maya-turquoise">Order books (CCXT live)</h2>
           {state?.books ? (
             <div className="space-y-3 text-sm">
               {Object.values(state.books).map((b) => (
@@ -202,27 +200,23 @@ export default function DashboardPage() {
             <p className="text-maya-parchment/50">Esperando datos…</p>
           )}
         </div>
+      </div>
 
-        <div className="glass rounded-xl p-6">
-          <h2 className="font-display mb-4 text-lg text-maya-turquoise">Wallets simulados</h2>
-          {state?.wallet ? (
-            <pre className="overflow-auto text-xs text-maya-parchment/80">
-              {JSON.stringify(state.wallet, null, 2)}
-            </pre>
-          ) : (
-            <p className="text-maya-parchment/50">—</p>
-          )}
-        </div>
+      <div className="mb-8">
+        <TradeProofPanel rows={trades} verify={verify} />
+      </div>
+
+      <div className="mb-8 grid gap-6 lg:grid-cols-2">
+        <SimulatedWalletNotice wallet={state?.wallet} />
+        <DemoAccountPanel />
       </div>
 
       <div className="grid gap-8 lg:grid-cols-2">
         <div className="glass rounded-xl p-6">
-          <h2 className="font-display mb-4 text-xl text-maya-gold">
-            Deliberación por oportunidad
-          </h2>
+          <h2 className="font-display mb-4 text-xl text-maya-gold">Deliberación del consejo</h2>
           <p className="mb-4 text-xs text-maya-parchment/50">
-            Cada ciclo agrupa los votos Hunab Ku → Kinich Ahau antes del siguiente tick. Selecciona un
-            ciclo para ver todos los agentes.
+            Votos en vivo Hunab Ku → Kinich Ahau. Busca{" "}
+            <code className="text-maya-turquoise">demo_execute</code> para órdenes CEX reales.
           </p>
           <OpportunityDeliberation
             events={liveEvents}
@@ -231,20 +225,31 @@ export default function DashboardPage() {
             onSelectCycle={setSelectedCycle}
           />
         </div>
-        <div className="space-y-6">
-          <OpportunitiesTable rows={opps} />
-          <TradesTable rows={trades as Parameters<typeof TradesTable>[0]["rows"]} />
-        </div>
+        <OpportunitiesTable rows={opps} />
       </div>
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({
+  label,
+  value,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  highlight?: "real";
+}) {
   return (
     <div className="glass rounded-xl p-4">
       <p className="text-xs text-maya-parchment/50">{label}</p>
-      <p className="font-display text-2xl font-bold text-maya-gold">{value}</p>
+      <p
+        className={`font-display text-2xl font-bold ${
+          highlight === "real" ? "text-emerald-400" : "text-maya-gold"
+        }`}
+      >
+        {value}
+      </p>
     </div>
   );
 }
@@ -254,11 +259,9 @@ function OpportunitiesTable({ rows }: { rows: OpportunityRow[] }) {
     <div className="glass rounded-xl p-4">
       <h3 className="mb-3 text-sm font-bold text-maya-turquoise">Últimas oportunidades</h3>
       {rows.length === 0 ? (
-        <p className="text-xs text-maya-parchment/50">
-          Sin registros aún — el pipeline puede estar en NO_ACTION/REJECT.
-        </p>
+        <p className="text-xs text-maya-parchment/50">Sin registros — mercado sin divergencia o rechazadas.</p>
       ) : (
-        <div className="max-h-64 overflow-auto">
+        <div className="max-h-96 overflow-auto">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="text-maya-parchment/50">
@@ -268,7 +271,7 @@ function OpportunitiesTable({ rows }: { rows: OpportunityRow[] }) {
               </tr>
             </thead>
             <tbody>
-              {rows.slice(0, 8).map((o, i) => (
+              {rows.slice(0, 12).map((o, i) => (
                 <tr key={o.id ?? i} className="border-t border-maya-gold/10">
                   <td className="py-2 pr-2 capitalize">
                     {o.buy_exchange}→{o.sell_exchange}

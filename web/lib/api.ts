@@ -1,5 +1,8 @@
 import { ENGINE_URL } from "./types";
 
+export type { TradeRow, DemoVerifyResponse } from "./dashboard";
+export { splitTrades, fetchDemoVerify } from "./dashboard";
+
 export async function fetchEngineState() {
   const res = await fetch(`${ENGINE_URL}/state`, { cache: "no-store" });
   if (!res.ok) throw new Error(`Engine unreachable: ${res.status}`);
