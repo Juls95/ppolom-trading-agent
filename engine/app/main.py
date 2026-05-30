@@ -108,12 +108,18 @@ async def get_state():
     demo_balances: dict[str, Any] = {}
     for ex in settings.exchanges:
         cred = demo_store.resolve_credential(ex)
-        if cred:
-            demo_balances[ex] = {
-                "label": cred.label,
-                "balances": cred.last_balances,
-                "error": cred.last_error,
-            }
+        if not cred:
+            continue
+        if not cred.last_balances and not cred.last_error:
+            try:
+                await demo_store.fetch_balances_for_cred(cred)
+            except Exception:
+                pass
+        demo_balances[ex] = {
+            "label": cred.label,
+            "balances": cred.last_balances,
+            "error": cred.last_error,
+        }
     return {
         **state.summary(),
         "wallet": wallet.snapshot(),
